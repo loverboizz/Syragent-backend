@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bảng Điều Khiển | AI Service Agent SaaS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: #cbd5e1;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800 antialiased flex h-screen overflow-hidden">
+
+  <!-- ===================================================================== -->
+  <!-- SIDEBAR NAVIGATION -->
+  <!-- ===================================================================== -->
+  <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800 select-none">
+    <!-- Brand Logo -->
+    <div class="h-16 flex items-center gap-3 px-6 border-b border-slate-800/80 bg-slate-950/40">
+      <div
+        class="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-cyan-400 flex items-center justify-center text-white font-bold shadow-md shadow-sky-500/20">
+        AI
+      </div>
+      <div>
+        <div class="font-bold text-sm text-white leading-tight">Agent SaaS</div>
+        <div class="text-[11px] text-sky-400 font-medium">B2B Service Platform</div>
+      </div>
+    </div>
+
+    <!-- Company Badge -->
+    <div class="px-5 py-3 border-b border-slate-800/60 bg-slate-950/20">
+      <div class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Doanh Nghiệp</div>
+      <div id="sidebar-company-name" class="text-sm font-semibold text-white truncate mt-0.5">Đang tải...</div>
+    </div>
+
+    <!-- Menu Items -->
+    <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
+      <button onclick="switchTab('overview')" id="nav-overview"
+        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-white bg-sky-600/20 border border-sky-500/30">
+        <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+        <span>Tổng quan</span>
+      </button>
+
+      <button onclick="switchTab('services')" id="nav-services"
+        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/60">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+        <span>Dịch vụ & Mã nhúng</span>
+      </button>
+
+      <button onclick="switchTab('agents')" id="nav-agents"
+        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/60">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+        <span>Cấu hình Trợ lý AI</span>
+      </button>
+
+      <button onclick="switchTab('knowledge')" id="nav-knowledge"
+        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/60">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        </svg>
+        <span>Tri thức & RAG</span>
+      </button>
+
+      <button onclick="switchTab('users')" id="nav-users"
+        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/60">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+        <span>Phân quyền Nhân sự</span>
+      </button>
+    </nav>
+
+    <!-- User Profile & Logout -->
+    <div class="p-4 border-t border-slate-800/80 bg-slate-950/40">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3 min-w-0">
+          <div
+            class="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-sm font-bold text-sky-400 shrink-0">
+            <span id="user-avatar-letter">U</span>
+          </div>
+          <div class="min-w-0">
+            <div id="sidebar-user-name" class="text-xs font-semibold text-white truncate">Đang tải...</div>
+            <div id="sidebar-user-role" class="text-[10px] text-slate-400 uppercase font-medium">ADMIN</div>
+          </div>
+        </div>
+        <button onclick="logout()" title="Đăng xuất"
+          class="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===================================================================== -->
+  <!-- MAIN CONTENT AREA -->
+  <!-- ===================================================================== -->
+  <main class="flex-1 flex flex-col h-screen overflow-hidden">
+    <!-- Top Header Bar -->
+    <header class="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0 shadow-sm">
+      <div class="flex items-center gap-3">
+        <h2 id="topbar-title" class="text-lg font-bold text-slate-800">Tổng quan Hệ thống</h2>
+        <span class="text-slate-300">|</span>
+        <span class="text-xs font-medium text-slate-500" id="topbar-subtitle">Bảng chỉ số và hoạt động</span>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <!-- Live status pill -->
+        <div
+          class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-200">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>FastAPI + Supabase Online</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Dynamic Tab Content Views -->
+    <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+
+      <!-- ================================================================= -->
+      <!-- TAB 1: OVERVIEW -->
+      <!-- ================================================================= -->
+      <section id="tab-content-overview" class="space-y-6">
+        <!-- Metric Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <!-- Card 1 -->
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng Dịch Vụ</p>
+              <h3 id="stat-services-count" class="text-3xl font-extrabold text-slate-800 mt-1.5">0</h3>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            </div>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Trợ Lý AI Hoạt Động</p>
+              <h3 id="stat-agents-count" class="text-3xl font-extrabold text-emerald-600 mt-1.5">0</h3>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
+
+          <!-- Card 3 -->
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Đoạn Tri Thức (Chunks)</p>
+              <h3 id="stat-chunks-count" class="text-3xl font-extrabold text-indigo-600 mt-1.5">0</h3>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3z" />
+              </svg>
+            </div>
+          </div>
+
+          <!-- Card 4 -->
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gói Cước AI</p>
+              <h3 id="stat-ai-tier" class="text-lg font-bold text-slate-800 mt-2">FREE & BYOK</h3>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Launch Banner -->
+        <div
+          class="bg-gradient-to-r from-sky-800 via-sky-700 to-cyan-700 rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row items-center justify-between gap-6">
+          <div>
+            <h3 class="text-lg font-bold">Quy Trình 3 Bước Để Kích Hoạt AI Cho Website Của Bạn</h3>
+            <p class="text-sky-100 text-sm mt-1">1. Tạo Dịch vụ $\rightarrow$ 2. Tải tài liệu hướng dẫn lên Kho Tri thức
+              $\rightarrow$ 3. Copy mã nhúng script dán vào website.</p>
+          </div>
+          <div class="flex gap-3 shrink-0">
+            <button onclick="openCreateServiceModal()"
+              class="px-4 py-2.5 bg-white text-sky-800 font-semibold text-sm rounded-xl hover:bg-sky-50 shadow-md transition-all">
+              + Tạo Dịch Vụ Mới
+            </button>
+            <button onclick="switchTab('knowledge')"
+              class="px-4 py-2.5 bg-sky-900/60 border border-sky-400/40 text-white font-semibold text-sm rounded-xl hover:bg-sky-900 transition-all">
+              Nạp Tài Liệu Tri Thức
+            </button>
+          </div>
+        </div>
+
+        <!-- Recent Services Table in Overview -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="font-bold text-sm text-slate-800">Danh Sách Dịch Vụ Của Doanh Nghiệp</h3>
+            <button onclick="switchTab('services')" class="text-xs font-semibold text-sky-600 hover:text-sky-800">Xem
+              tất cả &rarr;</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold border-b border-slate-200">
+                <tr>
+                  <th class="px-6 py-3.5">Tên Dịch Vụ</th>
+                  <th class="px-6 py-3.5">Mã Dịch Vụ (Slug)</th>
+                  <th class="px-6 py-3.5">Gói AI</th>
+                  <th class="px-6 py-3.5">Trạng Thái</th>
+                  <th class="px-6 py-3.5 text-right">Mã Nhúng</th>
+                </tr>
+              </thead>
+              <tbody id="overview-services-tbody" class="divide-y divide-slate-100 text-slate-700">
+                <tr>
+                  <td colspan="5" class="px-6 py-6 text-center text-slate-400">Đang tải dữ liệu dịch vụ...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================= -->
+      <!-- TAB 2: SERVICES MANAGEMENT -->
+      <!-- ================================================================= -->
+      <section id="tab-content-services" class="space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h3 class="text-base font-bold text-slate-800">Quản Lý Danh Sách Dịch Vụ</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Mỗi dịch vụ sở hữu 1 Trợ lý AI và 1 mã nhúng script độc lập.</p>
+          </div>
+          <button onclick="openCreateServiceModal()"
+            class="px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm rounded-xl shadow-md shadow-sky-600/20 transition-all flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Thêm Dịch Vụ Mới</span>
+          </button>
+        </div>
+
+        <!-- Services Main Table -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm">
+          <div class="overflow-x-auto md:overflow-visible">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold border-b border-slate-200">
+                <tr>
+                  <th class="px-6 py-3.5">Tên Dịch Vụ</th>
+                  <th class="px-6 py-3.5">Mã Dịch Vụ</th>
+                  <th class="px-6 py-3.5">Tên Miền Cho Phép (Whitelist)</th>
+                  <th class="px-6 py-3.5">Cấu Hình AI</th>
+                  <th class="px-6 py-3.5">Trạng Thái</th>
+                  <th class="px-6 py-3.5 text-right">Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody id="services-list-tbody" class="divide-y divide-slate-100 text-slate-700">
+                <tr>
+                  <td colspan="6" class="px-6 py-8 text-center text-slate-400">Đang tải danh sách dịch vụ...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================= -->
+      <!-- TAB 3: AI AGENT CONFIGURATION -->
+      <!-- ================================================================= -->
+      <section id="tab-content-agents" class="space-y-6 hidden">
+        <div>
+          <h3 class="text-base font-bold text-slate-800">Cấu Hình Trợ Lý AI & Khóa API (BYOK)</h3>
+          <p class="text-xs text-slate-500 mt-0.5">Tùy chỉnh mô hình LLM, chọn gói FREE hệ thống hoặc nhập khóa riêng
+            (OpenAI/Gemini).</p>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm max-w-3xl">
+          <!-- Select Service Dropdown -->
+          <div class="mb-6">
+            <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Chọn Dịch Vụ Cần Cấu
+              Hình</label>
+            <select id="agent-config-service-select" onchange="onServiceSelectForAgent(this.value)"
+              class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-sky-500 text-sm font-medium outline-none bg-white">
+              <option value="">-- Đang tải danh sách dịch vụ --</option>
+            </select>
+          </div>
+
+          <form id="agent-config-form" class="space-y-6">
+            <input type="hidden" id="agent-config-id" />
+
+            <!-- AI Tier Radio Group -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3">Gói Cước AI
+                (Tier)</label>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- FREE Option -->
+                <label
+                  class="relative flex flex-col p-4 rounded-xl border border-slate-200 cursor-pointer hover:border-sky-500 transition-all has-[:checked]:border-sky-600 has-[:checked]:bg-sky-50/40">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="font-bold text-sm text-slate-800">Gói Miễn Phí (FREE)</span>
+                    <input type="radio" name="ai_tier" value="FREE" id="tier-free"
+                      class="text-sky-600 focus:ring-sky-500" checked onchange="toggleBYOKFields(false)">
+                  </div>
+                  <p class="text-xs text-slate-500">Sử dụng Google Gemini 3.6 Flash tốc độ cao được tài trợ sẵn bởi nền
+                    tảng.</p>
+                </label>
+
+                <!-- BYOK Option -->
+                <label
+                  class="relative flex flex-col p-4 rounded-xl border border-slate-200 cursor-pointer hover:border-sky-500 transition-all has-[:checked]:border-sky-600 has-[:checked]:bg-sky-50/40">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="font-bold text-sm text-slate-800">Tự Cung Cấp Khóa (BYOK)</span>
+                    <input type="radio" name="ai_tier" value="BYOK" id="tier-byok"
+                      class="text-sky-600 focus:ring-sky-500" onchange="toggleBYOKFields(true)">
+                  </div>
+                  <p class="text-xs text-slate-500">Nhập API Key riêng (OpenAI GPT-4o hoặc Gemini) để sử dụng model cao
+                    cấp của doanh nghiệp.</p>
+                </label>
+              </div>
+            </div>
+
+            <!-- BYOK Details Container -->
+            <div id="byok-details-container" class="space-y-4 pt-4 border-t border-slate-100 hidden">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Nhà Cung Cấp
+                    LLM</label>
+                  <select id="agent-provider"
+                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-sky-500 text-sm outline-none bg-white">
+                    <option value="google">Google Gemini</option>
+                    <option value="openai">OpenAI</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Tên
+                    Model</label>
+                  <input type="text" id="agent-model-name" placeholder="VD: gemini-3.6-flash hoặc gpt-4o"
+                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-sky-500 text-sm outline-none">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">API Key Doanh
+                  Nghiệp</label>
+                <div class="relative">
+                  <input type="password" id="agent-api-key" placeholder="Dán khóa API (sk-... hoặc AIza...)"
+                    class="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-300 focus:ring-2 focus:ring-sky-500 text-sm outline-none font-mono">
+                  <button type="button" onclick="toggleApiKeyMask()"
+                    class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  </button>
+                </div>
+                <div class="flex items-center gap-2 mt-2 text-xs text-slate-500">
+                  <svg class="w-4 h-4 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  <span>Khóa được mã hóa đối xứng 256-bit Fernet tự động trước khi lưu vào cơ sở dữ liệu.</span>
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" id="save-agent-btn"
+              class="px-6 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm shadow-md shadow-sky-600/20 transition-all flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>Lưu Cấu Hình AI</span>
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <!-- ================================================================= -->
+      <!-- TAB 4: KNOWLEDGE BASE & RAG INGESTION -->
+      <!-- ================================================================= -->
+      <section id="tab-content-knowledge" class="space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h3 class="text-base font-bold text-slate-800">Kho Tri Thức & Vector RAG</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Nạp tài liệu nghiệp vụ, báo giá, tiêu chuẩn để AI trả lời khách
+              hàng chuẩn xác.</p>
+          </div>
+          <!-- Service Selector -->
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold text-slate-500">Dịch vụ:</span>
+            <select id="knowledge-service-select" onchange="onKnowledgeServiceChange(this.value)"
+              class="px-3 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-800 outline-none bg-white">
+              <option value="">-- Đang tải --</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Ingestion Forms Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Method 1: File Upload (PDF, Word, Excel, TXT, HTML) -->
+          <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between">
+            <div>
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </div>
+                <h4 class="font-bold text-sm text-slate-800">Tải File Tài Liệu Lên</h4>
+              </div>
+              <p class="text-xs text-slate-500 mb-4">Hỗ trợ file PDF, Word (.docx), Excel (.xlsx), văn bản TXT, HTML
+                hoặc Markdown. Hệ thống tự động trích xuất bảng biểu & cắt đoạn chunk.</p>
+
+              <!-- Dropzone -->
+              <div id="dropzone"
+                class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-sky-500 hover:bg-sky-50/20 transition-all cursor-pointer">
+                <input type="file" id="file-input" accept=".pdf,.docx,.doc,.xlsx,.xls,.txt,.html,.htm,.md" multiple
+                  class="hidden" onchange="onFileSelected(this.files)">
+                <svg class="w-10 h-10 text-slate-400 mx-auto mb-2" fill="none" stroke="currentColor"
+                  viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p id="file-label" class="text-xs font-semibold text-slate-700">Kéo thả một hoặc nhiều file vào đây hoặc
+                  <span class="text-sky-600">bấm chọn file</span>
+                </p>
+                <p class="text-[11px] text-slate-400 mt-1">Định dạng: PDF, Word (.docx), Excel (.xlsx), TXT, HTML (Max
+                  15MB)</p>
+              </div>
+            </div>
+
+            <button onclick="submitFileUpload()" id="upload-file-btn" disabled
+              class="w-full mt-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-all flex items-center justify-center gap-2">
+              <span>Bắt Đầu Vector Hóa File</span>
+            </button>
+          </div>
+
+          <!-- Method 2: Direct Text Ingestion -->
+          <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between">
+            <div>
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </div>
+                <h4 class="font-bold text-sm text-slate-800">Nhập Văn Bản Trực Tiếp</h4>
+              </div>
+              <p class="text-xs text-slate-500 mb-3">Dán trực tiếp câu hỏi thường gặp (FAQ), điều khoản hoặc mô tả quy
+                trình dịch vụ.</p>
+
+              <div class="space-y-3">
+                <input type="text" id="text-ingest-source"
+                  placeholder="Tên nguồn tài liệu (VD: Chính sách bảo hành 2026)"
+                  class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 outline-none">
+                <textarea id="text-ingest-content" rows="4" placeholder="Dán nội dung văn bản vào đây..."
+                  class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 outline-none custom-scrollbar"></textarea>
+              </div>
+            </div>
+
+            <button onclick="submitTextIngest()" id="upload-text-btn"
+              class="w-full mt-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm transition-all flex items-center justify-center gap-2">
+              <span>Lưu & Vector Hóa Văn Bản</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Chunks Table -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+            <h4 class="font-bold text-sm text-slate-800">Các Đoạn Tri Thức Đã Lưu Trong Supabase (Vector Chunks)</h4>
+            <button onclick="wipeAllChunksForAgent()"
+              class="text-xs text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              <span>Xóa Toàn Bộ Tri Thức</span>
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold border-b border-slate-200">
+                <tr>
+                  <th class="px-6 py-3.5 w-16">#</th>
+                  <th class="px-6 py-3.5 w-48">Nguồn Tài Liệu</th>
+                  <th class="px-6 py-3.5">Nội Dung Trích Đoạn (Chunk)</th>
+                  <th class="px-6 py-3.5 w-32">Ngày Nạp</th>
+                  <th class="px-6 py-3.5 w-20 text-right">Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody id="chunks-tbody" class="divide-y divide-slate-100 text-slate-700">
+                <tr>
+                  <td colspan="5" class="px-6 py-8 text-center text-slate-400">Chưa chọn dịch vụ hoặc chưa có dữ liệu
+                    tri thức.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================= -->
+      <!-- TAB 5: SUB-ADMIN USERS MANAGEMENT -->
+      <!-- ================================================================= -->
+      <section id="tab-content-users" class="space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h3 class="text-base font-bold text-slate-800">Quản Lý Phân Quyền & Nhân Sự</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Tạo tài khoản phụ (Sub-Admin) cho nhân viên quản lý dịch vụ trong
+              công ty.</p>
+          </div>
+          <button onclick="openCreateUserModal()"
+            class="px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm rounded-xl shadow-md shadow-sky-600/20 transition-all flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+            </svg>
+            <span>Thêm Quản Trị Viên Phụ</span>
+          </button>
+        </div>
+
+        <!-- Users Table -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold border-b border-slate-200">
+                <tr>
+                  <th class="px-6 py-3.5">Họ & Tên</th>
+                  <th class="px-6 py-3.5">Email</th>
+                  <th class="px-6 py-3.5">Vai Trò</th>
+                  <th class="px-6 py-3.5">Trạng Thái</th>
+                  <th class="px-6 py-3.5">Ngày Tham Gia</th>
+                  <th class="px-6 py-3.5 text-right">Khóa / Mở Khóa</th>
+                </tr>
+              </thead>
+              <tbody id="users-tbody" class="divide-y divide-slate-100 text-slate-700">
+                <tr>
+                  <td colspan="6" class="px-6 py-8 text-center text-slate-400">Đang tải danh sách nhân sự...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- MODALS -->
+  <!-- ===================================================================== -->
+
+  <!-- 1. MODAL: EMBED SCRIPT (1-CLICK COPY) -->
+  <div id="modal-embed"
+    class="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 transform transition-all">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center font-bold">
+            &lt;/&gt;
+          </div>
+          <div>
+            <h4 class="font-bold text-sm text-slate-800">Mã Nhúng Chat Widget</h4>
+            <p class="text-xs text-slate-500" id="embed-modal-service-name">Dịch vụ: S0257</p>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-embed')"
+          class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg">&times;</button>
+      </div>
+
+      <div class="py-5 space-y-4">
+        <p class="text-xs text-slate-600">
+          Chỉ cần sao chép dòng mã dưới đây và dán vào trước thẻ đóng <code
+            class="text-sky-600 bg-sky-50 px-1 py-0.5 rounded">&lt;/body&gt;</code> trên bất kỳ trang web nào của bạn:
+        </p>
+
+        <div class="relative">
+          <textarea id="embed-code-textarea" readonly rows="3"
+            class="w-full p-3 bg-slate-900 text-sky-300 font-mono text-xs rounded-xl outline-none border border-slate-800 select-all"></textarea>
+        </div>
+
+        <button onclick="copyEmbedCode()" id="embed-copy-btn"
+          class="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm shadow-md shadow-sky-600/20 transition-all flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+          </svg>
+          <span id="embed-copy-text">Sao Chép Mã Nhúng</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. MODAL: CREATE SERVICE -->
+  <div id="modal-service"
+    class="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+        <h4 id="modal-service-title" class="font-bold text-sm text-slate-800">Thêm Dịch Vụ Mới</h4>
+        <button onclick="closeModal('modal-service')"
+          class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg">&times;</button>
+      </div>
+
+      <form id="create-service-form" class="py-4 space-y-4">
+        <input type="hidden" id="service-id-input" value="">
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Tên Dịch Vụ</label>
+          <input type="text" id="service-name-input" required placeholder="VD: Khảo Sát Drone LiDAR Zenmuse L2"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-sky-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Mã Dịch Vụ (Slug duy
+            nhất)</label>
+          <input type="text" id="service-code-input" required placeholder="VD: s0257 hoặc lidar-survey"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-sky-500 outline-none font-mono">
+          <p class="text-[11px] text-slate-400 mt-1">Chỉ chứa chữ thường, số và dấu gạch nối.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Website Nhúng
+            (Whitelist URL)</label>
+          <input type="url" id="service-url-input" required placeholder="https://mycompany.vn/dich-vu-1"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-sky-500 outline-none">
+          <p class="text-[11px] text-slate-400 mt-1">Chặn các trang web trái phép gọi lén Chat Widget.</p>
+        </div>
+
+        <div id="service-status-container" class="hidden pt-1">
+          <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+            <input type="checkbox" id="service-status-input" checked
+              class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
+            <span>Kích hoạt hoạt động (Hiển thị widget trên landing page)</span>
+          </label>
+        </div>
+
+        <button type="submit" id="submit-service-btn"
+          class="w-full mt-2 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm shadow-md shadow-sky-600/20 transition-all flex items-center justify-center gap-2">
+          <span id="submit-service-btn-text">Tạo Dịch Vụ & Trợ Lý AI</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 3. MODAL: CREATE SUB-ADMIN -->
+  <div id="modal-user"
+    class="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+        <h4 class="font-bold text-sm text-slate-800">Thêm Quản Trị Viên Phụ (Sub-Admin)</h4>
+        <button onclick="closeModal('modal-user')"
+          class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg">&times;</button>
+      </div>
+
+      <form id="create-user-form" class="py-4 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Họ & Tên</label>
+          <input type="text" id="user-fullname-input" required placeholder="VD: Trần Thị Mai"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-sky-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Email Nhân
+            Viên</label>
+          <input type="email" id="user-email-input" required placeholder="mai.tran@company.com"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-sky-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Mật Khẩu Ban
+            Đầu</label>
+          <input type="password" id="user-password-input" required minlength="6" placeholder="Tối thiểu 6 ký tự"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-sky-500 outline-none">
+        </div>
+
+        <button type="submit" id="submit-user-btn"
+          class="w-full mt-2 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm shadow-md shadow-sky-600/20 transition-all flex items-center justify-center gap-2">
+          <span>Tạo Tài Khoản Sub-Admin</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/admin/js/api.js?v=1.6"></script>
+  <script src="/admin/js/app.js?v=1.6"></script>
+</body>
+
+</html>
