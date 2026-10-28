@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
 
+    from pydantic import field_validator
+
+    @field_validator("DATABASE_URL", "SECRET_KEY", "ENCRYPTION_KEY", "GOOGLE_API_KEY", mode="before")
+    @classmethod
+    def strip_whitespace(cls, v: str) -> str:
+        return v.strip() if isinstance(v, str) else v
+
     # --- CORS ---
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
