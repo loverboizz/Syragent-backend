@@ -133,6 +133,11 @@ class ChatMessageRecord(Base):
         nullable=True,
         comment="RAG retrieved sources metadata cited for this message",
     )
+    traces: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Chi tiết tiến trình ReAct: Reasoning, Tool Call, Status, Latency",
+    )
 
     # --- Timestamps ---
     created_at: Mapped[datetime] = mapped_column(

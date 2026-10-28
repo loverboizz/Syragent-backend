@@ -33,6 +33,26 @@ def decrypt_api_key(encrypted_key: str) -> str:
     return _fernet.decrypt(encrypted_key.encode()).decode()
 
 
+def encrypt_headers(headers: dict[str, str] | None) -> str | None:
+    """Encrypt a dictionary of headers to a base64 ciphertext string."""
+    if not headers:
+        return None
+    import json
+    return _fernet.encrypt(json.dumps(headers).encode()).decode()
+
+
+def decrypt_headers(encrypted_headers: str | None) -> dict[str, str]:
+    """Decrypt a stored ciphertext string back into headers dict."""
+    if not encrypted_headers:
+        return {}
+    import json
+    try:
+        decrypted_bytes = _fernet.decrypt(encrypted_headers.encode())
+        return json.loads(decrypted_bytes.decode())
+    except Exception:
+        return {}
+
+
 # ---------------------------------------------------------------------------
 # Password Hashing & Verification (Bcrypt)
 # ---------------------------------------------------------------------------

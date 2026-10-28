@@ -9,8 +9,8 @@ from app.models.service import Service
 from app.models.agent import Agent
 from app.models.knowledge_chunk import KnowledgeChunk
 from app.models.conversation import ConversationSession, ChatMessageRecord
+from app.models.agent_tool import AgentTool, HttpMethod, ToolActionType
 
-__all__ = ["Company", "User", "Service", "Agent", "KnowledgeChunk"]
 __all__ = [
     "Company",
     "User",
@@ -19,5 +19,8 @@ __all__ = [
     "KnowledgeChunk",
     "ConversationSession",
     "ChatMessageRecord",
+    "AgentTool",
+    "HttpMethod",
+    "ToolActionType",
 ]
 

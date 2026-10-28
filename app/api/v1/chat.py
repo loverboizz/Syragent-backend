@@ -127,7 +127,7 @@ async def chat_with_service_agent(
 
     # 4. Run RAG Pipeline
     try:
-        answer, sources = await answer_rag_query(
+        answer, sources, traces = await answer_rag_query(
             db=db,
             agent=agent,
             service_name=service.name,
@@ -142,9 +142,10 @@ async def chat_with_service_agent(
         return RAGQueryResponse(
             answer="Hệ thống đang bận hoặc gặp sự cố khi xử lý câu hỏi. Vui lòng thử lại sau.",
             sources=[],
+            traces=None,
         )
 
-    return RAGQueryResponse(answer=answer, sources=sources)
+    return RAGQueryResponse(answer=answer, sources=sources, traces=traces)
 
 
 @router.post(
@@ -266,7 +267,11 @@ async def chat_stream_with_service_agent(
     session_id = session.id
 
     # Async callback to persist assistant response when streaming finishes
-    async def save_assistant_reply(full_text: str, cited_sources: list[str]):
+    async def save_assistant_reply(
+        full_text: str,
+        cited_sources: list[str],
+        traces: dict | None = None,
+    ):
         if not full_text:
             return
         from app.core.database import async_session_factory
@@ -278,6 +283,7 @@ async def chat_stream_with_service_agent(
                 role="assistant",
                 content=full_text,
                 sources=sources_json,
+                traces=traces,
             )
             s_db.add(assistant_record)
             sess_update = (

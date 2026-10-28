@@ -87,6 +87,12 @@ class Agent(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    tools: Mapped[list["AgentTool"]] = relationship(
+        "AgentTool",
+        back_populates="agent",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
     @property
     def has_api_key(self) -> bool:

@@ -30,6 +30,15 @@ from app.schemas.document import (
     RAGQueryRequest,
     RAGQueryResponse,
 )
+from app.schemas.agent_tool import (
+    AgentToolCreate,
+    AgentToolUpdate,
+    AgentToolResponse,
+    AgentToolTestRequest,
+    AgentToolTestResponse,
+    HttpMethodEnum,
+    ToolActionTypeEnum,
+)
 
 __all__ = [
     "CompanyUpdate",
@@ -53,4 +62,11 @@ __all__ = [
     "KnowledgeChunkResponse",
     "RAGQueryRequest",
     "RAGQueryResponse",
+    "AgentToolCreate",
+    "AgentToolUpdate",
+    "AgentToolResponse",
+    "AgentToolTestRequest",
+    "AgentToolTestResponse",
+    "HttpMethodEnum",
+    "ToolActionTypeEnum",
 ]

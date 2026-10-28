@@ -16,6 +16,7 @@ class ChatMessageResponse(BaseModel):
     role: str
     content: str
     sources: list[dict] | None = None
+    traces: dict | None = None
     created_at: datetime
 
 

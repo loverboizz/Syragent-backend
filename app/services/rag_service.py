@@ -19,8 +19,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.security import decrypt_api_key
 from app.models.agent import Agent, AITier
+from app.models.agent_tool import AgentTool
 from app.models.knowledge_chunk import KnowledgeChunk
 from app.services.embedding import get_embedding
+from app.services.agent_runner import TraceCollector, run_react_agent_gemini
 
 
 # ---------------------------------------------------------------------------
@@ -300,13 +302,14 @@ async def answer_rag_query(
     query: str,
     top_k: int = 4,
     chat_history: list[dict] | None = None,
-) -> tuple[str, list[str]]:
+) -> tuple[str, list[str], dict[str, Any]]:
     """
-    Execute full RAG pipeline:
+    Execute full ReAct / RAG pipeline:
       1. Vector retrieval of top_k relevant chunks
-      2. Format grounding prompt with chat history
-      3. Route to configured LLM (Free Gemini or BYOK custom key)
-      4. Returns (answer, list_of_cited_sources)
+      2. Fetch active tools configured for the Agent
+      3. Format grounding prompt with chat history
+      4. Execute ReAct reasoning loop (with tool execution & tracing if tools exist)
+      5. Returns (answer, list_of_cited_sources, trace_dict)
     """
     # 1. Retrieve relevant chunks
     chunks = await search_relevant_chunks(
@@ -316,13 +319,19 @@ async def answer_rag_query(
         top_k=top_k,
     )
 
-    # Collect unique sources
     sources: list[str] = []
     for c in chunks:
         if c.source and c.source not in sources:
             sources.append(c.source)
 
-    # 2. Build Prompt
+    # 2. Retrieve active tools for this agent
+    tool_stmt = select(AgentTool).where(
+        AgentTool.agent_id == agent.id,
+        AgentTool.is_active.is_(True),
+    )
+    tools = list((await db.execute(tool_stmt)).scalars().all())
+
+    # 3. Build Prompt
     prompt = build_rag_prompt(
         service_name=service_name,
         query=query,
@@ -330,41 +339,52 @@ async def answer_rag_query(
         chat_history=chat_history,
     )
 
-    # 3. Route to LLM
+    trace = TraceCollector(query=query)
+
+    # 4. Resolve API Key & Provider
     if agent.ai_tier == AITier.FREE:
-        # FREE Tier uses global key from .env
         api_key = settings.GOOGLE_API_KEY
         if not api_key:
             raise ValueError("GOOGLE_API_KEY is not configured for FREE tier.")
-        answer = await _call_gemini_generate(
-            api_key=api_key,
-            model_name=agent.model_name or "gemini-2.5-flash",
-            prompt=prompt,
-        )
+        provider = "google"
+        model_name = agent.model_name or "gemini-3.6-flash"
     elif agent.ai_tier == AITier.BYOK:
-        # BYOK Tier decrypts customer's API key
         if not agent.encrypted_api_key:
             raise ValueError("Agent is configured as BYOK but has no API key stored.")
-        user_key = decrypt_api_key(agent.encrypted_api_key)
-
+        api_key = decrypt_api_key(agent.encrypted_api_key)
         provider = (agent.llm_provider or "google").lower()
-        if provider == "openai":
-            answer = await _call_openai_generate(
-                api_key=user_key,
-                model_name=agent.model_name,
-                prompt=prompt,
-            )
-        else:
-            # Default to Gemini with customer's key
-            answer = await _call_gemini_generate(
-                api_key=user_key,
-                model_name=agent.model_name or "gemini-2.5-flash",
-                prompt=prompt,
-            )
+        model_name = agent.model_name or "gemini-3.6-flash"
     else:
-        answer = "Không thể xác định cấu hình gói AI của dịch vụ."
+        return "Không thể xác định cấu hình gói AI của dịch vụ.", sources, trace.to_dict()
 
-    return answer, sources
+    # 5. Execute ReAct Loop if tools exist, or standard generation
+    if tools and provider == "google":
+        answer, trace_dict = await run_react_agent_gemini(
+            api_key=api_key,
+            model_name=model_name,
+            system_instruction=prompt,
+            query=query,
+            tools=tools,
+            trace=trace,
+        )
+        return answer, sources, trace_dict
+
+    # Standard fallback if no tools or non-gemini
+    if provider == "openai":
+        answer = await _call_openai_generate(
+            api_key=api_key,
+            model_name=model_name,
+            prompt=prompt,
+        )
+    else:
+        answer = await _call_gemini_generate(
+            api_key=api_key,
+            model_name=model_name,
+            prompt=prompt,
+        )
+
+    trace.add_synthesis(model_name, 0.0, answer)
+    return answer, sources, trace.to_dict()
 
 
 async def stream_rag_query(
@@ -377,14 +397,8 @@ async def stream_rag_query(
     on_complete: Any = None,
 ) -> AsyncIterator[str]:
     """
-    Execute RAG pipeline with real-time SSE streaming:
-      1. Vector retrieval of top_k relevant chunks.
-      2. Yield initial sources event: data: {"type": "sources", "sources": [...]}\\n\\n
-      3. Format grounding prompt with chat history.
-      4. Stream LLM tokens as: data: {"type": "token", "token": "..."}\\n\\n
-      5. Yield termination event: data: {"type": "done"}\\n\\n
-      6. Triggers on_complete(full_answer, sources) callback if provided.
-      If an error occurs: data: {"type": "error", "error": "..."}\\n\\n
+    Execute RAG / ReAct pipeline with real-time SSE streaming.
+    If Agent uses custom tools, executes ReAct loop and streams the synthesized response.
     """
     try:
         # 1. Retrieve relevant chunks
@@ -395,7 +409,6 @@ async def stream_rag_query(
             top_k=top_k,
         )
 
-        # Collect unique sources
         sources: list[str] = []
         for c in chunks:
             if c.source and c.source not in sources:
@@ -404,7 +417,41 @@ async def stream_rag_query(
         # 2. Yield sources first so the UI knows citations early
         yield f"data: {json.dumps({'type': 'sources', 'sources': sources}, ensure_ascii=False)}\n\n"
 
-        # 3. Build Prompt
+        # 3. Retrieve active tools
+        tool_stmt = select(AgentTool).where(
+            AgentTool.agent_id == agent.id,
+            AgentTool.is_active.is_(True),
+        )
+        tools = list((await db.execute(tool_stmt)).scalars().all())
+
+        # If tools are configured, run ReAct loop to allow tool execution
+        if tools:
+            answer, sources, trace_dict = await answer_rag_query(
+                db=db,
+                agent=agent,
+                service_name=service_name,
+                query=query,
+                top_k=top_k,
+                chat_history=chat_history,
+            )
+
+            # Stream tokens of the final synthesized answer
+            words = answer.split(" ")
+            for i, word in enumerate(words):
+                token = word if i == len(words) - 1 else word + " "
+                yield f"data: {json.dumps({'type': 'token', 'token': token}, ensure_ascii=False)}\n\n"
+
+            # Execute on_complete callback with trace
+            if on_complete and callable(on_complete):
+                try:
+                    await on_complete(answer, sources, trace_dict)
+                except Exception as save_err:
+                    print(f"[CHAT_SAVE_ERROR] Failed to save conversation message: {save_err}")
+
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+            return
+
+        # 4. Standard Streaming if no tools
         prompt = build_rag_prompt(
             service_name=service_name,
             query=query,
@@ -414,7 +461,6 @@ async def stream_rag_query(
 
         full_answer_parts: list[str] = []
 
-        # 4. Route to streaming LLM
         if agent.ai_tier == AITier.FREE:
             api_key = settings.GOOGLE_API_KEY
             if not api_key:
@@ -452,19 +498,14 @@ async def stream_rag_query(
                 ):
                     full_answer_parts.append(token)
                     yield f"data: {json.dumps({'type': 'token', 'token': token}, ensure_ascii=False)}\n\n"
-        else:
-            yield f"data: {json.dumps({'type': 'error', 'error': 'Gói dịch vụ AI không hợp lệ.'}, ensure_ascii=False)}\n\n"
-            return
 
-        # 5. Execute on_complete callback to persist assistant response to DB
         completed_answer = "".join(full_answer_parts).strip()
         if on_complete and callable(on_complete):
             try:
-                await on_complete(completed_answer, sources)
+                await on_complete(completed_answer, sources, None)
             except Exception as save_err:
                 print(f"[CHAT_SAVE_ERROR] Failed to save conversation message: {save_err}")
 
-        # 6. Signal completion
         yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
 
     except Exception as exc:

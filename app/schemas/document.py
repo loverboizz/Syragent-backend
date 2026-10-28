@@ -4,6 +4,7 @@ Pydantic Schemas for Document Ingestion & RAG Queries.
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -98,5 +99,9 @@ class RAGQueryResponse(BaseModel):
     sources: list[str] = Field(
         default_factory=list,
         description="List of document sources referenced to construct the answer",
+    )
+    traces: dict[str, Any] | None = Field(
+        default=None,
+        description="Detailed ReAct execution trace (Reasoning, Tool Calls, Latencies)",
     )
 

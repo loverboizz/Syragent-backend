@@ -12,6 +12,8 @@ from app.api.v1.agents import router as agents_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.chat import router as chat_router
 from app.api.v1.conversations import router as conversations_router
+from app.api.v1.agent_tools import router as agent_tools_router
+from app.api.v1.sandbox_erp import router as sandbox_erp_router
 
 api_v1_router = APIRouter()
 
@@ -23,3 +25,5 @@ api_v1_router.include_router(agents_router)
 api_v1_router.include_router(documents_router)
 api_v1_router.include_router(chat_router)
 api_v1_router.include_router(conversations_router)
+api_v1_router.include_router(agent_tools_router)
+api_v1_router.include_router(sandbox_erp_router)
