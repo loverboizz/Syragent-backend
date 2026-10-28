@@ -80,6 +80,17 @@ if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
+@app.get("/", tags=["System"])
+async def root():
+    """Root endpoint for status check and deployment verification."""
+    return {
+        "status": "online",
+        "app": settings.APP_NAME,
+        "environment": settings.APP_ENV,
+        "message": "Syragent Platform Backend is running successfully.",
+    }
+
+
 @app.get("/health", tags=["System"])
 async def health_check():
     """Simple health check endpoint for load balancers and monitoring."""
@@ -95,6 +106,21 @@ async def get_widget_js():
     """Direct URL to serve the embeddable chat widget script."""
     widget_path = STATIC_DIR / "widget.js"
     return FileResponse(widget_path, media_type="application/javascript")
+
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Ensure unhandled exceptions return a JSON body and maintain CORS headers."""
+    import traceback
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Database / Server Error: {str(exc)}"},
+    )
 
 
 # ---------------------------------------------------------------------------
