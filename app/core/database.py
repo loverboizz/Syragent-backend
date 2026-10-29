@@ -21,6 +21,7 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.is_development,  # Log SQL in dev mode
     pool_pre_ping=True,            # Verify connections before checkout
+    pool_recycle=300,              # Recycle connections every 5 mins to prevent stale cloud sockets
     pool_size=10,
     max_overflow=20,
 )
