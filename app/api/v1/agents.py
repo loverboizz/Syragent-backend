@@ -21,6 +21,8 @@ from app.models.agent import Agent, AITier
 from app.models.service import Service
 from app.models.user import User
 from app.schemas.agent import AgentCreate, AgentResponse, AgentUpdate
+from app.schemas.document import RAGQueryRequest, RAGQueryResponse
+from app.services.rag_service import answer_rag_query
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
 
@@ -220,3 +222,54 @@ async def update_agent(
     await db.refresh(agent)
 
     return agent
+
+
+@router.post(
+    "/{agent_id}/test-chat",
+    response_model=RAGQueryResponse,
+    summary="Test chat with an Agent directly from Dashboard Playground",
+)
+async def test_chat_with_agent(
+    agent_id: uuid.UUID,
+    payload: RAGQueryRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Authenticated endpoint for testing an Agent's RAG + ReAct response
+    directly inside the Admin Dashboard without origin whitelist restrictions.
+    """
+    query = (
+        select(Agent, Service)
+        .join(Service, Agent.service_id == Service.id)
+        .where(
+            Agent.id == agent_id,
+            Service.company_id == current_user.company_id,
+        )
+    )
+    row = (await db.execute(query)).first()
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent not found in your organization.",
+        )
+
+    agent, service = row
+    try:
+        answer, sources, trace_dict = await answer_rag_query(
+            db=db,
+            agent=agent,
+            service_name=service.name,
+            query=payload.question,
+        )
+        return RAGQueryResponse(
+            answer=answer,
+            sources=sources,
+            traces=trace_dict,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
