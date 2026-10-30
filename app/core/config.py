@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     DEEPSEEK_API_KEY: str = ""
     GROQ_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
 
     from pydantic import field_validator
 
@@ -52,6 +53,7 @@ class Settings(BaseSettings):
         "ANTHROPIC_API_KEY",
         "DEEPSEEK_API_KEY",
         "GROQ_API_KEY",
+        "OPENROUTER_API_KEY",
         mode="before",
     )
     @classmethod

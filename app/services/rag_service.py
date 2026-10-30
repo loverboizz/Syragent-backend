@@ -330,35 +330,72 @@ async def _call_anthropic_stream(
                     continue
 
 
+OPENROUTER_MODEL_MAP: dict[str, str] = {
+    "deepseek-chat": "deepseek/deepseek-chat",
+    "gpt-4o-mini": "openai/gpt-4o-mini",
+    "gpt-4o": "openai/gpt-4o",
+    "claude-3-5-sonnet-latest": "anthropic/claude-3.5-sonnet",
+    "claude-3-5-haiku-latest": "anthropic/claude-3.5-haiku",
+    "models/gemini-3.6-flash": "google/gemini-2.5-flash",
+    "gemini-3.6-flash": "google/gemini-2.5-flash",
+    "models/gemini-3.1-pro-preview": "google/gemini-2.5-pro",
+    "gemini-3.1-pro-preview": "google/gemini-2.5-pro",
+}
+
+
+def _find_openrouter_fallback_key() -> str:
+    """Return any configured OpenRouter key (sk-or-v1-...) across env vars."""
+    for candidate in (
+        settings.OPENROUTER_API_KEY,
+        settings.DEEPSEEK_API_KEY,
+        settings.OPENAI_API_KEY,
+        settings.ANTHROPIC_API_KEY,
+    ):
+        if candidate and candidate.startswith("sk-or-v1-"):
+            return candidate
+    return ""
+
+
 def _resolve_managed_provider_and_key(agent: Agent) -> tuple[str, str, str]:
     """
     Resolve the centralized platform API key, provider, and model_name
     from Syragent's managed configuration (.env).
+    Automatically detects OpenRouter keys (sk-or-v1-...) and normalizes model IDs.
     """
     provider = (agent.llm_provider or "google").lower().strip()
     model_name = (agent.model_name or "models/gemini-3.6-flash").strip()
+    openrouter_fallback = _find_openrouter_fallback_key()
 
     if provider == "openai":
-        api_key = settings.OPENAI_API_KEY
+        api_key = settings.OPENAI_API_KEY or openrouter_fallback
         if not api_key:
             raise ValueError("Hạ tầng Syragent chưa cấu hình OPENAI_API_KEY trong .env.")
     elif provider == "anthropic":
-        api_key = settings.ANTHROPIC_API_KEY
+        api_key = settings.ANTHROPIC_API_KEY or openrouter_fallback
         if not api_key:
             raise ValueError("Hạ tầng Syragent chưa cấu hình ANTHROPIC_API_KEY trong .env.")
     elif provider == "deepseek":
-        api_key = settings.DEEPSEEK_API_KEY
+        api_key = settings.DEEPSEEK_API_KEY or openrouter_fallback
         if not api_key:
             raise ValueError("Hạ tầng Syragent chưa cấu hình DEEPSEEK_API_KEY trong .env.")
     elif provider == "groq":
-        api_key = settings.GROQ_API_KEY
+        api_key = settings.GROQ_API_KEY or openrouter_fallback
         if not api_key:
             raise ValueError("Hạ tầng Syragent chưa cấu hình GROQ_API_KEY trong .env.")
+    elif provider == "openrouter":
+        api_key = settings.OPENROUTER_API_KEY or openrouter_fallback
+        if not api_key:
+            raise ValueError("Hạ tầng Syragent chưa cấu hình OPENROUTER_API_KEY trong .env.")
     else:
         provider = "google"
-        api_key = settings.GOOGLE_API_KEY
+        api_key = settings.GOOGLE_API_KEY or openrouter_fallback
         if not api_key:
             raise ValueError("Hạ tầng Syragent chưa cấu hình GOOGLE_API_KEY trong .env.")
+
+    # Auto-detect OpenRouter key prefix (sk-or-v1-...)
+    if api_key.startswith("sk-or-v1-"):
+        provider = "openrouter"
+        model_name = OPENROUTER_MODEL_MAP.get(model_name, model_name)
 
     return provider, model_name, api_key
 
@@ -480,6 +517,13 @@ async def answer_rag_query(
             model_name=model_name,
             prompt=prompt,
         )
+    elif provider == "openrouter":
+        answer = await _call_openai_generate(
+            api_key=api_key,
+            model_name=model_name,
+            prompt=prompt,
+            base_url="https://openrouter.ai/api/v1/chat/completions",
+        )
     elif provider == "deepseek":
         answer = await _call_openai_generate(
             api_key=api_key,
@@ -589,6 +633,13 @@ async def stream_rag_query(
                 api_key=api_key,
                 model_name=model_name,
                 prompt=prompt,
+            )
+        elif provider == "openrouter":
+            stream_iter = _call_openai_stream(
+                api_key=api_key,
+                model_name=model_name,
+                prompt=prompt,
+                base_url="https://openrouter.ai/api/v1/chat/completions",
             )
         elif provider == "deepseek":
             stream_iter = _call_openai_stream(
