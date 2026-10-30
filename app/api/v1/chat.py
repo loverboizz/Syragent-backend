@@ -18,14 +18,67 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.security import decode_access_token
 from app.models.agent import Agent
+from app.models.company import Company
 from app.models.service import Service
+from app.models.user import User
 from app.models.conversation import ConversationSession, ChatMessageRecord
 from app.schemas.document import RAGQueryRequest, RAGQueryResponse
 from app.schemas.conversation import VisitorHistoryResponse, ChatMessageResponse
 from app.services.rag_service import answer_rag_query, stream_rag_query
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
+
+
+async def _build_authenticated_user_context(
+    authorization: str | None,
+    db: AsyncSession,
+) -> str:
+    """
+    If the widget visitor is logged into the Syragent dashboard and passes a valid
+    Bearer JWT token, resolve their User, Company, and owned Services so the AI Agent
+    automatically knows who they are and which service_codes belong to them.
+    """
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return ""
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        return ""
+
+    payload = decode_access_token(token)
+    if not payload or not payload.get("sub"):
+        return ""
+
+    try:
+        import uuid as _uuid
+        user_id = _uuid.UUID(str(payload["sub"]))
+        user_res = await db.execute(select(User).where(User.id == user_id))
+        user = user_res.scalar_one_or_none()
+        if not user:
+            return ""
+
+        comp_res = await db.execute(select(Company).where(Company.id == user.company_id))
+        company = comp_res.scalar_one_or_none()
+
+        svc_res = await db.execute(select(Service).where(Service.company_id == user.company_id))
+        services = svc_res.scalars().all()
+
+        svc_descriptions = [
+            f"{s.code} (Tên: '{s.name}', Trạng thái: {'Đang bật' if s.is_active else 'Tạm ngưng'}, URL: {s.service_url})"
+            for s in services
+        ]
+        svc_str = "; ".join(svc_descriptions) if svc_descriptions else "Chưa tạo dịch vụ nào"
+
+        return (
+            f"[NGỮ CẢNH HỆ THỐNG - NGƯỜI DÙNG SYRAGENT ĐANG ĐĂNG NHẬP: "
+            f"Email='{user.email}', Công ty='{company.name if company else 'N/A'}', "
+            f"Danh sách dịch vụ sở hữu (service_code): {svc_str}. "
+            f"Nếu người dùng hỏi kiểm tra dịch vụ hoặc lấy mã nhúng của họ mà không ghi rõ mã, "
+            f"hãy chủ động dùng service_code trong danh sách trên để gọi công cụ hỗ trợ.]\n"
+        )
+    except Exception:
+        return ""
 
 
 def _verify_origin_whitelist(
@@ -82,6 +135,7 @@ async def chat_with_service_agent(
     db: Annotated[AsyncSession, Depends(get_db)],
     origin: Annotated[str | None, Header()] = None,
     referer: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None,
 ):
     """
     Public Chat Endpoint:
@@ -125,13 +179,16 @@ async def chat_with_service_agent(
             sources=[],
         )
 
-    # 4. Run RAG Pipeline
+    # 4. Run RAG Pipeline (with automatic logged-in Syragent user context if token provided)
+    user_ctx = await _build_authenticated_user_context(authorization, db)
+    enriched_query = f"{user_ctx}{payload.question}" if user_ctx else payload.question
+
     try:
         answer, sources, traces = await answer_rag_query(
             db=db,
             agent=agent,
             service_name=service.name,
-            query=payload.question,
+            query=enriched_query,
         )
     except Exception as exc:
         if settings.is_development:
@@ -159,6 +216,7 @@ async def chat_stream_with_service_agent(
     db: Annotated[AsyncSession, Depends(get_db)],
     origin: Annotated[str | None, Header()] = None,
     referer: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None,
 ):
     """
     Real-Time Streaming Chat Endpoint (Server-Sent Events):
@@ -297,13 +355,16 @@ async def chat_stream_with_service_agent(
             await s_db.execute(sess_update)
             await s_db.commit()
 
-    # 5. Stream RAG Pipeline
+    # 5. Stream RAG Pipeline (with automatic logged-in Syragent user context if token provided)
+    user_ctx = await _build_authenticated_user_context(authorization, db)
+    enriched_query = f"{user_ctx}{payload.question}" if user_ctx else payload.question
+
     return StreamingResponse(
         stream_rag_query(
             db=db,
             agent=agent,
             service_name=service.name,
-            query=payload.question,
+            query=enriched_query,
             chat_history=chat_history,
             on_complete=save_assistant_reply,
         ),

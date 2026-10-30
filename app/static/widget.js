@@ -554,11 +554,21 @@
       }
 
       try {
+        const reqHeaders = {
+          "Content-Type": "application/json",
+        };
+        try {
+          const jwtToken = localStorage.getItem("ai_agent_jwt_token");
+          if (jwtToken) {
+            reqHeaders["Authorization"] = `Bearer ${jwtToken}`;
+          }
+        } catch (_e) {
+          // Ignore localStorage access errors in restricted iframes
+        }
+
         const res = await fetch(`${apiBase}/api/v1/chat/${serviceCode}/stream`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: reqHeaders,
           body: JSON.stringify({ question: question, visitor_id: visitorId }),
         });
 

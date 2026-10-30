@@ -7,10 +7,20 @@ and Support Tickets) without polluting PostgreSQL with tenant business tables.
 
 import random
 from datetime import datetime, timezone
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.models.agent import Agent
+from app.models.agent_tool import AgentTool
+from app.models.company import Company
+from app.models.knowledge_chunk import KnowledgeChunk
+from app.models.service import Service
+from app.models.user import User
 
 router = APIRouter(prefix="/sandbox", tags=["Sandbox ERP (Demo Tools)"])
 
@@ -235,8 +245,236 @@ async def sandbox_create_ticket(payload: CreateTicketPayload):
     }
 
 
+# ---------------------------------------------------------------------------
+# 4. Syragent Platform User Support Tools (Real PostgreSQL Queries)
+# ---------------------------------------------------------------------------
+@router.get(
+    "/syragent/account-lookup",
+    summary="[Syragent Support] Tra cứu tài khoản doanh nghiệp & danh sách dịch vụ theo Email/Tên công ty",
+)
+async def syragent_account_lookup(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    keyword: str = Query(..., description="Email người dùng, tên công ty, hoặc mã dịch vụ cần tìm"),
+):
+    """
+    Giúp Syragent Support Agent xác định người dùng đang trò chuyện là ai khi họ
+    chưa đăng nhập hoặc hỏi về dịch vụ của công ty mình.
+    """
+    kw = keyword.strip()
+    if not kw:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Vui lòng cung cấp từ khóa tìm kiếm (Email, Tên công ty hoặc Mã dịch vụ).",
+        )
+
+    pattern = f"%{kw}%"
+
+    # Find matching companies via Company.name, User.email, or Service.code/name
+    stmt = (
+        select(Company)
+        .outerjoin(User, User.company_id == Company.id)
+        .outerjoin(Service, Service.company_id == Company.id)
+        .where(
+            or_(
+                Company.name.ilike(pattern),
+                User.email.ilike(pattern),
+                Service.code.ilike(pattern),
+                Service.name.ilike(pattern),
+            )
+        )
+        .distinct()
+        .limit(5)
+    )
+    res = await db.execute(stmt)
+    companies = res.scalars().all()
+
+    if not companies:
+        return {
+            "found": False,
+            "keyword": kw,
+            "total_companies": 0,
+            "accounts": [],
+            "message": f"Không tìm thấy doanh nghiệp hoặc tài khoản nào khớp với từ khóa '{kw}'.",
+        }
+
+    accounts_data = []
+    for comp in companies:
+        u_res = await db.execute(select(User).where(User.company_id == comp.id))
+        users = u_res.scalars().all()
+        s_res = await db.execute(select(Service).where(Service.company_id == comp.id))
+        services = s_res.scalars().all()
+
+        accounts_data.append(
+            {
+                "company_id": str(comp.id),
+                "company_name": comp.name,
+                "admin_emails": [u.email for u in users],
+                "services": [
+                    {
+                        "service_code": s.code,
+                        "service_name": s.name,
+                        "is_active": s.is_active,
+                        "service_url": s.service_url,
+                    }
+                    for s in services
+                ],
+            }
+        )
+
+    return {
+        "found": True,
+        "keyword": kw,
+        "total_companies": len(accounts_data),
+        "accounts": accounts_data,
+    }
+
+
+@router.get(
+    "/syragent/diagnose/{service_code}",
+    summary="[Syragent Support] Chẩn đoán trạng thái kỹ thuật của Dịch vụ & AI Agent",
+)
+async def syragent_diagnose_service(
+    service_code: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Truy vấn trực tiếp PostgreSQL của Syragent để kiểm tra sức khỏe cấu hình của một
+    dịch vụ (service_code): trạng thái kích hoạt, tên miền whitelist, mô hình AI,
+    số lượng đoạn tri thức RAG đã nạp, và số lượng công cụ Action Gateway.
+    """
+    clean_code = service_code.strip().lower()
+    svc_res = await db.execute(select(Service).where(func.lower(Service.code) == clean_code))
+    service = svc_res.scalar_one_or_none()
+
+    if not service:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": "SERVICE_NOT_FOUND",
+                "message": f"Không tìm thấy dịch vụ nào có mã '{service_code}' trên hệ thống Syragent.",
+            },
+        )
+
+    comp_res = await db.execute(select(Company).where(Company.id == service.company_id))
+    company = comp_res.scalar_one_or_none()
+
+    agent_res = await db.execute(select(Agent).where(Agent.service_id == service.id))
+    agent = agent_res.scalar_one_or_none()
+
+    knowledge_chunks_count = 0
+    knowledge_sources: list[str] = []
+    active_tools_count = 0
+    active_tools_list: list[dict[str, str]] = []
+    health_warnings: list[str] = []
+
+    if not service.is_active:
+        health_warnings.append(
+            "Dịch vụ đang ở trạng thái TẠM NGƯNG (is_active=False). Widget nhúng sẽ không phản hồi cho đến khi bật lại."
+        )
+
+    if not agent:
+        health_warnings.append(
+            "Dịch vụ chưa được khởi tạo cấu hình AI Agent. Vui lòng vào tab '1. Cấu Hình AI' và bấm Lưu cấu hình."
+        )
+    else:
+        cnt_res = await db.execute(
+            select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.agent_id == agent.id)
+        )
+        knowledge_chunks_count = cnt_res.scalar() or 0
+
+        src_res = await db.execute(
+            select(KnowledgeChunk.source)
+            .where(KnowledgeChunk.agent_id == agent.id)
+            .distinct()
+        )
+        knowledge_sources = [row[0] for row in src_res.all() if row[0]]
+
+        if knowledge_chunks_count == 0:
+            health_warnings.append(
+                "AI Agent chưa có tài liệu tri thức RAG nào (0 đoạn vector). Hãy vào tab '2. Kho Tri Thức (RAG)' để tải lên file PDF/DOCX/TXT."
+            )
+
+        tools_res = await db.execute(
+            select(AgentTool).where(
+                AgentTool.agent_id == agent.id,
+                AgentTool.is_active.is_(True),
+            )
+        )
+        active_tools = tools_res.scalars().all()
+        active_tools_count = len(active_tools)
+        active_tools_list = [
+            {
+                "tool_name": t.name,
+                "method": t.http_method.value if hasattr(t.http_method, "value") else str(t.http_method),
+                "execution_mode": t.action_type.value if hasattr(t.action_type, "value") else str(t.action_type),
+            }
+            for t in active_tools
+        ]
+
+    status_summary = (
+        "HOẠT ĐỘNG TỐT (HEALTHY)"
+        if not health_warnings
+        else f"CẦN CHÚ Ý ({len(health_warnings)} cảnh báo)"
+    )
+
+    return {
+        "service_code": service.code,
+        "service_name": service.name,
+        "company_name": company.name if company else "Không xác định",
+        "is_active": service.is_active,
+        "whitelisted_service_url": service.service_url,
+        "agent_configured": agent is not None,
+        "llm_provider": agent.llm_provider if agent else None,
+        "llm_model": agent.model_name if agent else None,
+        "knowledge_chunks_count": knowledge_chunks_count,
+        "knowledge_documents": knowledge_sources,
+        "active_tools_count": active_tools_count,
+        "active_tools": active_tools_list,
+        "health_status": status_summary,
+        "health_warnings": health_warnings,
+    }
+
+
+@router.get(
+    "/syragent/embed-code/{service_code}",
+    summary="[Syragent Support] Tạo mã nhúng Widget JS & hướng dẫn tích hợp cho Dịch vụ",
+)
+async def syragent_get_embed_code(
+    service_code: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Trả về đoạn mã nhúng HTML <script> chuẩn xác theo mã dịch vụ của người dùng
+    kèm lưu ý cấu hình CORS Domain Whitelist.
+    """
+    clean_code = service_code.strip().lower()
+    svc_res = await db.execute(select(Service).where(func.lower(Service.code) == clean_code))
+    service = svc_res.scalar_one_or_none()
+
+    actual_code = service.code if service else clean_code
+    whitelisted_url = service.service_url if service else "Chưa đăng ký (Cần khai báo URL website trong cấu hình dịch vụ)"
+
+    script_tag = (
+        f'<script src="https://syragent-backend.onrender.com/widget.js" '
+        f'data-service="{actual_code}" defer></script>'
+    )
+
+    return {
+        "service_code": actual_code,
+        "service_exists_in_db": service is not None,
+        "service_name": service.name if service else "Dịch vụ mẫu",
+        "whitelisted_domain": whitelisted_url,
+        "embed_script_html": script_tag,
+        "integration_steps": [
+            "Bước 1: Sao chép thẻ <script> bên trên và dán vào ngay trước thẻ đóng </body> trong file index.html hoặc layout gốc của website.",
+            f"Bước 2: Đảm bảo tên miền website nhúng khớp với URL đã đăng ký trong dịch vụ ({whitelisted_url}) để không bị chặn bởi bộ lọc bảo mật CORS Whitelist.",
+            "Bước 3: Tải lại trang web, bong bóng chat Syragent sẽ xuất hiện ở góc dưới màn hình.",
+        ],
+    }
+
+
 class SandboxSampleTestRequest(BaseModel):
-    tool_name: str = Field(..., description="Tên công cụ mẫu: lookup_order | check_product_stock | create_support_ticket")
+    tool_name: str = Field(..., description="Tên công cụ mẫu cần chạy thử")
     test_parameters: dict[str, Any] = Field(default_factory=dict, description="Tham số truyền vào để chạy thử")
 
 
@@ -244,9 +482,12 @@ class SandboxSampleTestRequest(BaseModel):
     "/test-sample-tool",
     summary="[Sandbox] Chạy thử công cụ mẫu & mô phỏng luồng suy luận ReAct (Không lưu vào Agent)",
 )
-async def sandbox_test_sample_tool(payload: SandboxSampleTestRequest):
+async def sandbox_test_sample_tool(
+    payload: SandboxSampleTestRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
     """
-    Cho phép doanh nghiệp bấm chạy thử 3 công cụ mẫu ngay trên giao diện để hiểu cách
+    Cho phép doanh nghiệp bấm chạy thử công cụ mẫu ngay trên giao diện để hiểu cách
     Action Gateway gọi API và cách AI Agent tổng hợp câu trả lời, hoàn toàn độc lập
     và KHÔNG thêm công cụ mẫu vào danh sách công cụ thực tế của AI Agent.
     """
@@ -257,7 +498,73 @@ async def sandbox_test_sample_tool(payload: SandboxSampleTestRequest):
     params = payload.test_parameters or {}
 
     try:
-        if tool_name == "lookup_order":
+        if tool_name == "lookup_syragent_account":
+            keyword = str(params.get("keyword", "")).strip() or "syragent"
+            data = await syragent_account_lookup(db=db, keyword=keyword)
+            elapsed = round((time.perf_counter() - start_time) * 1000, 2)
+            if data["found"]:
+                first = data["accounts"][0]
+                svc_codes = ", ".join(f"`{s['service_code']}` ({s['service_name']})" for s in first["services"]) or "Chưa có dịch vụ"
+                ai_reply = (
+                    f"Dạ em đã tìm thấy thông tin tài khoản doanh nghiệp **{first['company_name']}**:\n"
+                    f"- **Email quản trị:** {', '.join(first['admin_emails'])}\n"
+                    f"- **Danh sách dịch vụ (service_code):** {svc_codes}"
+                )
+            else:
+                ai_reply = data["message"]
+            return {
+                "success": True,
+                "status_code": 200,
+                "response_time_ms": elapsed,
+                "error": None,
+                "data": data,
+                "simulated_ai_reply": ai_reply,
+            }
+
+        elif tool_name == "check_syragent_service":
+            service_code = str(params.get("service_code", "")).strip() or "syragent-agent"
+            data = await syragent_diagnose_service(service_code=service_code, db=db)
+            elapsed = round((time.perf_counter() - start_time) * 1000, 2)
+            warnings_txt = (
+                "\n".join(f"  ⚠️ {w}" for w in data["health_warnings"])
+                if data["health_warnings"]
+                else "  ✅ Tất cả thông số cấu hình đều hoạt động tốt!"
+            )
+            ai_reply = (
+                f"Dạ em đã kiểm tra kỹ thuật dịch vụ **`{data['service_code']}`** ({data['service_name']}):\n"
+                f"- **Trạng thái:** {'Đang hoạt động' if data['is_active'] else 'Đang tạm ngưng'} | **Mô hình AI:** `{data['llm_model']}`\n"
+                f"- **Kho tri thức RAG:** {data['knowledge_chunks_count']} đoạn vector ({len(data['knowledge_documents'])} tài liệu)\n"
+                f"- **Công cụ ReAct đang bật:** {data['active_tools_count']} công cụ\n"
+                f"- **Chẩn đoán:**\n{warnings_txt}"
+            )
+            return {
+                "success": True,
+                "status_code": 200,
+                "response_time_ms": elapsed,
+                "error": None,
+                "data": data,
+                "simulated_ai_reply": ai_reply,
+            }
+
+        elif tool_name == "get_widget_embed_code":
+            service_code = str(params.get("service_code", "")).strip() or "syragent-agent"
+            data = await syragent_get_embed_code(service_code=service_code, db=db)
+            elapsed = round((time.perf_counter() - start_time) * 1000, 2)
+            ai_reply = (
+                f"Dạ đây là mã nhúng Widget Chat cho dịch vụ **`{data['service_code']}`**:\n"
+                f"```html\n{data['embed_script_html']}\n```\n"
+                f"- **Domain được phép nhúng (Whitelist):** `{data['whitelisted_domain']}`"
+            )
+            return {
+                "success": True,
+                "status_code": 200,
+                "response_time_ms": elapsed,
+                "error": None,
+                "data": data,
+                "simulated_ai_reply": ai_reply,
+            }
+
+        elif tool_name == "lookup_order":
             order_id = str(params.get("order_id", "")).strip()
             if not order_id:
                 return {
