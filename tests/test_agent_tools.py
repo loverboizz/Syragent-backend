@@ -300,8 +300,6 @@ async def test_agent_tools_api_crud_and_test():
                 "service_id": service_id,
                 "llm_provider": "google",
                 "model_name": "gemini-3.6-flash",
-                "ai_tier": "FREE",
-                "system_prompt": "Bạn là nhân viên hỗ trợ.",
             },
         )
         assert agent_res.status_code == 201, agent_res.text

@@ -13,7 +13,6 @@ from app.schemas.agent import (
     AgentCreate,
     AgentUpdate,
     AgentResponse,
-    AITierEnum,
 )
 from app.schemas.user import (
     UserRegisterRequest,
@@ -50,7 +49,6 @@ __all__ = [
     "AgentCreate",
     "AgentUpdate",
     "AgentResponse",
-    "AITierEnum",
     "UserRegisterRequest",
     "UserLoginRequest",
     "TokenResponse",

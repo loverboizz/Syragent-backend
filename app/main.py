@@ -46,8 +46,8 @@ app = FastAPI(
     title=settings.APP_NAME,
     description=(
         "Multi-Tenant AI Agent Platform for Service Management. "
-        "Each service gets a dedicated RAG-based AI agent with "
-        "Freemium + BYOK billing."
+        "Each service gets a dedicated RAG-based AI agent powered by "
+        "Syragent Managed AI and ReAct Action Gateway."
     ),
     version="0.1.0",
     lifespan=lifespan,

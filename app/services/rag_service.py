@@ -5,20 +5,18 @@ Handles:
   - Vector similarity search with pgvector (cosine distance on HNSW index)
   - Strict tenant isolation (filtering by agent_id)
   - Prompt construction with retrieved context & sources
-  - Multi-provider LLM response generation (Gemini Free Tier & BYOK OpenAI/Gemini/Anthropic)
+  - Multi-provider LLM response generation via Syragent Managed Infrastructure
 """
 
 import json
 import uuid
-from typing import Any
 from typing import Any, AsyncIterator
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.security import decrypt_api_key
-from app.models.agent import Agent, AITier
+from app.models.agent import Agent
 from app.models.agent_tool import AgentTool
 from app.models.knowledge_chunk import KnowledgeChunk
 from app.services.embedding import get_embedding
@@ -109,10 +107,11 @@ async def _call_openai_generate(
     api_key: str,
     model_name: str,
     prompt: str,
+    base_url: str = "https://api.openai.com/v1/chat/completions",
 ) -> str:
-    """Call OpenAI Chat Completions API."""
-    target_model = model_name if model_name else "gpt-4o"
-    url = "https://api.openai.com/v1/chat/completions"
+    """Call OpenAI or OpenAI-compatible (DeepSeek / Groq) Chat Completions API."""
+    target_model = model_name if model_name else "gpt-4o-mini"
+    url = base_url
 
     payload = {
         "model": target_model,
@@ -120,7 +119,7 @@ async def _call_openai_generate(
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.3,
-        "max_tokens": 1024,
+        "max_tokens": 2048,
     }
 
     headers = {
@@ -131,12 +130,45 @@ async def _call_openai_generate(
     async with httpx.AsyncClient(timeout=45.0) as client:
         res = await client.post(url, json=payload, headers=headers)
         if res.status_code != 200:
-            raise RuntimeError(f"OpenAI API Error ({res.status_code}): {res.text}")
+            raise RuntimeError(f"LLM API Error ({res.status_code}): {res.text}")
         data = res.json()
         choices = data.get("choices", [])
         if not choices:
             return "Xin lỗi, hiện tại không thể kết nối tới mô hình AI."
         return choices[0].get("message", {}).get("content", "").strip()
+
+
+async def _call_anthropic_generate(
+    api_key: str,
+    model_name: str,
+    prompt: str,
+) -> str:
+    """Call Anthropic Claude Messages API."""
+    target_model = model_name if model_name else "claude-3-5-sonnet-latest"
+    url = "https://api.anthropic.com/v1/messages"
+
+    payload = {
+        "model": target_model,
+        "max_tokens": 2048,
+        "temperature": 0.3,
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+    }
+
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        res = await client.post(url, json=payload, headers=headers)
+        if res.status_code != 200:
+            raise RuntimeError(f"Anthropic API Error ({res.status_code}): {res.text}")
+        data = res.json()
+        content_blocks = data.get("content", [])
+        return "".join(b.get("text", "") for b in content_blocks if b.get("type") == "text").strip()
 
 
 async def _call_gemini_stream(
@@ -201,10 +233,11 @@ async def _call_openai_stream(
     api_key: str,
     model_name: str,
     prompt: str,
+    base_url: str = "https://api.openai.com/v1/chat/completions",
 ) -> AsyncIterator[str]:
-    """Call OpenAI Chat Completions API with streaming enabled."""
-    target_model = model_name if model_name else "gpt-4o"
-    url = "https://api.openai.com/v1/chat/completions"
+    """Call OpenAI or OpenAI-compatible (DeepSeek / Groq) API with streaming enabled."""
+    target_model = model_name if model_name else "gpt-4o-mini"
+    url = base_url
 
     payload = {
         "model": target_model,
@@ -212,7 +245,7 @@ async def _call_openai_stream(
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.3,
-        "max_tokens": 1024,
+        "max_tokens": 2048,
         "stream": True,
     }
 
@@ -226,7 +259,7 @@ async def _call_openai_stream(
             if response.status_code != 200:
                 err_body = await response.aread()
                 raise RuntimeError(
-                    f"OpenAI Streaming Error ({response.status_code}): {err_body.decode('utf-8', errors='ignore')}"
+                    f"LLM Streaming Error ({response.status_code}): {err_body.decode('utf-8', errors='ignore')}"
                 )
 
             async for line in response.aiter_lines():
@@ -246,6 +279,88 @@ async def _call_openai_stream(
                             yield content
                 except json.JSONDecodeError:
                     continue
+
+
+async def _call_anthropic_stream(
+    api_key: str,
+    model_name: str,
+    prompt: str,
+) -> AsyncIterator[str]:
+    """Call Anthropic Claude Messages API with SSE streaming."""
+    target_model = model_name if model_name else "claude-3-5-sonnet-latest"
+    url = "https://api.anthropic.com/v1/messages"
+
+    payload = {
+        "model": target_model,
+        "max_tokens": 2048,
+        "temperature": 0.3,
+        "stream": True,
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+    }
+
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        async with client.stream("POST", url, json=payload, headers=headers) as response:
+            if response.status_code != 200:
+                err_body = await response.aread()
+                raise RuntimeError(
+                    f"Anthropic Streaming Error ({response.status_code}): {err_body.decode('utf-8', errors='ignore')}"
+                )
+
+            async for line in response.aiter_lines():
+                line = line.strip()
+                if not line or not line.startswith("data: "):
+                    continue
+                data_str = line[6:].strip()
+                try:
+                    chunk = json.loads(data_str)
+                    if chunk.get("type") == "content_block_delta":
+                        delta = chunk.get("delta", {})
+                        text = delta.get("text", "")
+                        if text:
+                            yield text
+                except json.JSONDecodeError:
+                    continue
+
+
+def _resolve_managed_provider_and_key(agent: Agent) -> tuple[str, str, str]:
+    """
+    Resolve the centralized platform API key, provider, and model_name
+    from Syragent's managed configuration (.env).
+    """
+    provider = (agent.llm_provider or "google").lower().strip()
+    model_name = (agent.model_name or "models/gemini-3.6-flash").strip()
+
+    if provider == "openai":
+        api_key = settings.OPENAI_API_KEY
+        if not api_key:
+            raise ValueError("Hạ tầng Syragent chưa cấu hình OPENAI_API_KEY trong .env.")
+    elif provider == "anthropic":
+        api_key = settings.ANTHROPIC_API_KEY
+        if not api_key:
+            raise ValueError("Hạ tầng Syragent chưa cấu hình ANTHROPIC_API_KEY trong .env.")
+    elif provider == "deepseek":
+        api_key = settings.DEEPSEEK_API_KEY
+        if not api_key:
+            raise ValueError("Hạ tầng Syragent chưa cấu hình DEEPSEEK_API_KEY trong .env.")
+    elif provider == "groq":
+        api_key = settings.GROQ_API_KEY
+        if not api_key:
+            raise ValueError("Hạ tầng Syragent chưa cấu hình GROQ_API_KEY trong .env.")
+    else:
+        provider = "google"
+        api_key = settings.GOOGLE_API_KEY
+        if not api_key:
+            raise ValueError("Hạ tầng Syragent chưa cấu hình GOOGLE_API_KEY trong .env.")
+
+    return provider, model_name, api_key
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +419,7 @@ async def answer_rag_query(
     chat_history: list[dict] | None = None,
 ) -> tuple[str, list[str], dict[str, Any]]:
     """
-    Execute full ReAct / RAG pipeline:
+    Execute full ReAct / RAG pipeline on Syragent Managed AI:
       1. Vector retrieval of top_k relevant chunks
       2. Fetch active tools configured for the Agent
       3. Format grounding prompt with chat history
@@ -341,27 +456,16 @@ async def answer_rag_query(
 
     trace = TraceCollector(query=query)
 
-    # 4. Resolve API Key & Provider
-    if agent.ai_tier == AITier.FREE:
-        api_key = settings.GOOGLE_API_KEY
-        if not api_key:
-            raise ValueError("GOOGLE_API_KEY is not configured for FREE tier.")
-        provider = "google"
-        model_name = agent.model_name or "gemini-3.6-flash"
-    elif agent.ai_tier == AITier.BYOK:
-        if not agent.encrypted_api_key:
-            raise ValueError("Agent is configured as BYOK but has no API key stored.")
-        api_key = decrypt_api_key(agent.encrypted_api_key)
-        provider = (agent.llm_provider or "google").lower()
-        model_name = agent.model_name or "gemini-3.6-flash"
-    else:
-        return "Không thể xác định cấu hình gói AI của dịch vụ.", sources, trace.to_dict()
+    # 4. Resolve Managed API Key & Provider
+    provider, model_name, api_key = _resolve_managed_provider_and_key(agent)
 
-    # 5. Execute ReAct Loop if tools exist, or standard generation
-    if tools and provider == "google":
+    # 5. Execute ReAct Loop if tools exist
+    if tools:
+        gemini_key = settings.GOOGLE_API_KEY or api_key
+        react_model = model_name if provider == "google" else "models/gemini-3.6-flash"
         answer, trace_dict = await run_react_agent_gemini(
-            api_key=api_key,
-            model_name=model_name,
+            api_key=gemini_key,
+            model_name=react_model,
             system_instruction=prompt,
             query=query,
             tools=tools,
@@ -369,9 +473,29 @@ async def answer_rag_query(
         )
         return answer, sources, trace_dict
 
-    # Standard fallback if no tools or non-gemini
+    # 6. Standard Generation by Managed Provider
     if provider == "openai":
         answer = await _call_openai_generate(
+            api_key=api_key,
+            model_name=model_name,
+            prompt=prompt,
+        )
+    elif provider == "deepseek":
+        answer = await _call_openai_generate(
+            api_key=api_key,
+            model_name=model_name,
+            prompt=prompt,
+            base_url="https://api.deepseek.com/v1/chat/completions",
+        )
+    elif provider == "groq":
+        answer = await _call_openai_generate(
+            api_key=api_key,
+            model_name=model_name,
+            prompt=prompt,
+            base_url="https://api.groq.com/openai/v1/chat/completions",
+        )
+    elif provider == "anthropic":
+        answer = await _call_anthropic_generate(
             api_key=api_key,
             model_name=model_name,
             prompt=prompt,
@@ -397,7 +521,7 @@ async def stream_rag_query(
     on_complete: Any = None,
 ) -> AsyncIterator[str]:
     """
-    Execute RAG / ReAct pipeline with real-time SSE streaming.
+    Execute RAG / ReAct pipeline with real-time SSE streaming via Syragent Managed AI.
     If Agent uses custom tools, executes ReAct loop and streams the synthesized response.
     """
     try:
@@ -435,13 +559,11 @@ async def stream_rag_query(
                 chat_history=chat_history,
             )
 
-            # Stream tokens of the final synthesized answer
             words = answer.split(" ")
             for i, word in enumerate(words):
                 token = word if i == len(words) - 1 else word + " "
                 yield f"data: {json.dumps({'type': 'token', 'token': token}, ensure_ascii=False)}\n\n"
 
-            # Execute on_complete callback with trace
             if on_complete and callable(on_complete):
                 try:
                     await on_complete(answer, sources, trace_dict)
@@ -459,45 +581,45 @@ async def stream_rag_query(
             chat_history=chat_history,
         )
 
+        provider, model_name, api_key = _resolve_managed_provider_and_key(agent)
         full_answer_parts: list[str] = []
 
-        if agent.ai_tier == AITier.FREE:
-            api_key = settings.GOOGLE_API_KEY
-            if not api_key:
-                yield f"data: {json.dumps({'type': 'error', 'error': 'Chưa cấu hình GOOGLE_API_KEY cho gói FREE.'}, ensure_ascii=False)}\n\n"
-                return
-
-            async for token in _call_gemini_stream(
+        if provider == "openai":
+            stream_iter = _call_openai_stream(
                 api_key=api_key,
-                model_name=agent.model_name or "gemini-3.6-flash",
+                model_name=model_name,
                 prompt=prompt,
-            ):
-                full_answer_parts.append(token)
-                yield f"data: {json.dumps({'type': 'token', 'token': token}, ensure_ascii=False)}\n\n"
+            )
+        elif provider == "deepseek":
+            stream_iter = _call_openai_stream(
+                api_key=api_key,
+                model_name=model_name,
+                prompt=prompt,
+                base_url="https://api.deepseek.com/v1/chat/completions",
+            )
+        elif provider == "groq":
+            stream_iter = _call_openai_stream(
+                api_key=api_key,
+                model_name=model_name,
+                prompt=prompt,
+                base_url="https://api.groq.com/openai/v1/chat/completions",
+            )
+        elif provider == "anthropic":
+            stream_iter = _call_anthropic_stream(
+                api_key=api_key,
+                model_name=model_name,
+                prompt=prompt,
+            )
+        else:
+            stream_iter = _call_gemini_stream(
+                api_key=api_key,
+                model_name=model_name,
+                prompt=prompt,
+            )
 
-        elif agent.ai_tier == AITier.BYOK:
-            if not agent.encrypted_api_key:
-                yield f"data: {json.dumps({'type': 'error', 'error': 'Trợ lý AI chưa có API Key.'}, ensure_ascii=False)}\n\n"
-                return
-            user_key = decrypt_api_key(agent.encrypted_api_key)
-
-            provider = (agent.llm_provider or "google").lower()
-            if provider == "openai":
-                async for token in _call_openai_stream(
-                    api_key=user_key,
-                    model_name=agent.model_name,
-                    prompt=prompt,
-                ):
-                    full_answer_parts.append(token)
-                    yield f"data: {json.dumps({'type': 'token', 'token': token}, ensure_ascii=False)}\n\n"
-            else:
-                async for token in _call_gemini_stream(
-                    api_key=user_key,
-                    model_name=agent.model_name or "gemini-3.6-flash",
-                    prompt=prompt,
-                ):
-                    full_answer_parts.append(token)
-                    yield f"data: {json.dumps({'type': 'token', 'token': token}, ensure_ascii=False)}\n\n"
+        async for token in stream_iter:
+            full_answer_parts.append(token)
+            yield f"data: {json.dumps({'type': 'token', 'token': token}, ensure_ascii=False)}\n\n"
 
         completed_answer = "".join(full_answer_parts).strip()
         if on_complete and callable(on_complete):

@@ -76,7 +76,6 @@ async def test_upload_office():
                     "service_id": target_service["id"],
                     "llm_provider": "google",
                     "model_name": "models/gemini-3.6-flash",
-                    "ai_tier": "FREE",
                 },
             )
             assert agent_res.status_code == 201, f"Failed to create agent: {agent_res.text}"

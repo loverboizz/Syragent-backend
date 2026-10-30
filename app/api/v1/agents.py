@@ -2,9 +2,10 @@
 AI Agent Management Endpoints.
 
 Handles:
+  - GET   /api/v1/agents/models         : List available Syragent Managed AI models
   - POST  /api/v1/agents/               : Configure Agent for a Service (1-to-1)
   - GET   /api/v1/agents/by-service/{id}: Retrieve Agent configured for a Service
-  - PATCH /api/v1/agents/{agent_id}     : Update LLM config & manage BYOK / FREE billing tiers
+  - PATCH /api/v1/agents/{agent_id}     : Update managed LLM configuration
 """
 
 import uuid
@@ -16,13 +17,72 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_active_user, require_super_admin
-from app.core.security import encrypt_api_key
 from app.models.agent import Agent, AITier
 from app.models.service import Service
 from app.models.user import User
-from app.schemas.agent import AgentCreate, AgentResponse, AgentUpdate, AITierEnum
+from app.schemas.agent import AgentCreate, AgentResponse, AgentUpdate
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
+
+MANAGED_MODELS_CATALOG = [
+    {
+        "provider": "google",
+        "provider_label": "Google DeepMind",
+        "model_name": "models/gemini-3.6-flash",
+        "display_name": "Gemini 3.6 Flash",
+        "badge": "Mặc định • Tốc độ cao",
+        "description": "Tối ưu cho hội thoại RAG thời gian thực và thực thi ReAct Action Gateway độ trễ cực thấp.",
+    },
+    {
+        "provider": "google",
+        "provider_label": "Google DeepMind",
+        "model_name": "models/gemini-3.1-pro-preview",
+        "display_name": "Gemini 3.1 Pro",
+        "badge": "Suy luận chuyên sâu",
+        "description": "Phân tích tài liệu kỹ thuật dài, suy luận đa bước phức tạp và độ chính xác ngữ nghĩa cao.",
+    },
+    {
+        "provider": "openai",
+        "provider_label": "OpenAI",
+        "model_name": "gpt-4o-mini",
+        "display_name": "GPT-4o Mini",
+        "badge": "Phản hồi nhanh",
+        "description": "Mô hình gọn nhẹ của OpenAI, phản hồi mượt mà cho các tác vụ chăm sóc khách hàng đa ngôn ngữ.",
+    },
+    {
+        "provider": "openai",
+        "provider_label": "OpenAI",
+        "model_name": "gpt-4o",
+        "display_name": "GPT-4o Flagship",
+        "badge": "Đa năng cao cấp",
+        "description": "Mô hình flagship của OpenAI với khả năng tổng hợp thông tin và tuân thủ chỉ thị xuất sắc.",
+    },
+    {
+        "provider": "anthropic",
+        "provider_label": "Anthropic",
+        "model_name": "claude-3-5-sonnet-latest",
+        "display_name": "Claude 3.5 Sonnet",
+        "badge": "Văn phong tự nhiên",
+        "description": "Nổi bật với văn phong tư vấn tự nhiên, lịch sự và bám sát tuyệt đối ngữ cảnh tài liệu.",
+    },
+    {
+        "provider": "deepseek",
+        "provider_label": "DeepSeek AI",
+        "model_name": "deepseek-chat",
+        "display_name": "DeepSeek V3",
+        "badge": "Hiệu năng cao",
+        "description": "Mô hình ngôn ngữ lớn thế hệ mới tối ưu cho bài toán phân tích dữ liệu và hỏi đáp nghiệp vụ.",
+    },
+]
+
+
+@router.get(
+    "/models",
+    summary="List available Syragent Managed AI models",
+)
+async def list_managed_models():
+    """Return the curated catalog of LLM models managed by Syragent."""
+    return MANAGED_MODELS_CATALOG
 
 
 @router.post(
@@ -37,12 +97,10 @@ async def create_agent(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """
-    Initialize and link an AI Agent to a Service (enforcing 1-to-1):
+    Initialize and link a managed AI Agent to a Service (enforcing 1-to-1):
       - Verifies that the Service belongs to the caller's company
       - Verifies that the Service does not already have an Agent configured
-      - Billing Strategy:
-          * FREE: Uses global system key from .env (no key stored in DB)
-          * BYOK: Encrypts the customer's API key with Fernet before saving
+      - Uses Syragent Managed AI infrastructure
     """
     # 1. Verify Service belongs to the tenant
     service_query = select(Service).where(
@@ -68,19 +126,13 @@ async def create_agent(
             detail="This Service already has an AI Agent configured. Use PATCH to update it.",
         )
 
-    # 3. Apply encryption based on tier
-    encrypted_key = None
-    if payload.ai_tier == AITierEnum.BYOK:
-        # Note: payload validator guarantees api_key is non-empty for BYOK
-        encrypted_key = encrypt_api_key(payload.api_key)
-
-    # 4. Create Agent
+    # 3. Create Agent on Syragent Managed AI infrastructure
     agent = Agent(
         service_id=payload.service_id,
         llm_provider=payload.llm_provider,
         model_name=payload.model_name,
-        ai_tier=AITier(payload.ai_tier.value),
-        encrypted_api_key=encrypted_key,
+        ai_tier=AITier.FREE,
+        encrypted_api_key=None,
     )
     db.add(agent)
     await db.flush()
@@ -100,7 +152,6 @@ async def get_agent_by_service(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Retrieve the AI Agent associated with a specific service."""
-    # Verify service ownership first
     service_query = select(Service).where(
         Service.id == service_id,
         Service.company_id == current_user.company_id,
@@ -112,7 +163,6 @@ async def get_agent_by_service(
             detail="Service not found in your organization.",
         )
 
-    # Fetch agent
     agent_query = select(Agent).where(Agent.service_id == service_id)
     agent_res = await db.execute(agent_query)
     agent = agent_res.scalar_one_or_none()
@@ -129,7 +179,7 @@ async def get_agent_by_service(
 @router.patch(
     "/{agent_id}",
     response_model=AgentResponse,
-    summary="Update Agent configuration & AI Tier (Super Admin only)",
+    summary="Update Agent managed LLM configuration (Super Admin only)",
 )
 async def update_agent(
     agent_id: uuid.UUID,
@@ -138,12 +188,8 @@ async def update_agent(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """
-    Update LLM provider, model name, or switch billing tiers:
-      - Switching FREE → BYOK requires a new api_key
-      - Switching BYOK → FREE wipes the stored encrypted_api_key
-      - Staying on BYOK can optionally rotate the api_key
+    Update managed LLM provider and model name for an Agent.
     """
-    # 1. Fetch Agent with its Service to verify tenant ownership
     query = (
         select(Agent)
         .join(Service, Agent.service_id == Service.id)
@@ -161,36 +207,16 @@ async def update_agent(
             detail="Agent not found in your organization.",
         )
 
-    # 2. Update basic fields
     if payload.llm_provider is not None:
         agent.llm_provider = payload.llm_provider
     if payload.model_name is not None:
         agent.model_name = payload.model_name
 
-    # 3. Handle Tier & API Key updates
-    if payload.ai_tier is not None:
-        target_tier = AITier(payload.ai_tier.value)
-
-        if target_tier == AITier.FREE:
-            # Switching to FREE: erase encrypted key
-            agent.ai_tier = AITier.FREE
-            agent.encrypted_api_key = None
-        elif target_tier == AITier.BYOK:
-            agent.ai_tier = AITier.BYOK
-            if payload.api_key:
-                agent.encrypted_api_key = encrypt_api_key(payload.api_key)
-            elif not agent.encrypted_api_key:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="An API key is required when activating BYOK tier.",
-                )
-    elif payload.api_key:
-        # User is keeping current tier but rotating key
-        if agent.ai_tier == AITier.BYOK:
-            agent.encrypted_api_key = encrypt_api_key(payload.api_key)
+    # Ensure managed defaults
+    agent.ai_tier = AITier.FREE
+    agent.encrypted_api_key = None
 
     await db.flush()
     await db.refresh(agent)
 
     return agent
-

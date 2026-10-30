@@ -2,7 +2,7 @@
 Agent Model.
 
 Each Service has exactly one AI Agent (1-to-1 via UNIQUE FK).
-Stores LLM configuration and the optional encrypted BYOK API key.
+Stores managed LLM configuration for the Service.
 """
 
 import enum
@@ -17,9 +17,9 @@ from app.core.database import Base
 
 
 class AITier(str, enum.Enum):
-    """Billing tier for AI usage."""
+    """Internal legacy enum kept for PostgreSQL column compatibility."""
     FREE = "FREE"
-    BYOK = "BYOK"  # Bring Your Own Key
+    BYOK = "BYOK"
 
 
 class Agent(Base):
@@ -41,28 +41,30 @@ class Agent(Base):
         comment="1-to-1 link to the parent Service",
     )
 
-    # --- LLM Configuration ---
+    # --- LLM Configuration (Syragent Managed AI) ---
     llm_provider: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        comment="e.g., 'google', 'openai', 'anthropic'",
+        default="google",
+        comment="Managed LLM provider: 'google', 'openai', 'anthropic', 'deepseek', 'groq'",
     )
     model_name: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
-        comment="e.g., 'gemini-1.5-flash', 'gpt-4o', 'claude-3.5-sonnet'",
+        default="models/gemini-3.6-flash",
+        comment="Managed LLM model identifier",
     )
     ai_tier: Mapped[AITier] = mapped_column(
         Enum(AITier, name="ai_tier", create_constraint=True),
         nullable=False,
         default=AITier.FREE,
-        comment="FREE uses global key; BYOK uses customer's encrypted key",
+        comment="Legacy DB compatibility column",
     )
     encrypted_api_key: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         default=None,
-        comment="Fernet-encrypted API key (only populated for BYOK tier)",
+        comment="Deprecated legacy column (unused)",
     )
 
     # --- Timestamps ---
@@ -94,14 +96,8 @@ class Agent(Base):
         lazy="selectin",
     )
 
-    @property
-    def has_api_key(self) -> bool:
-        """Check if an encrypted API key is present without decrypting it."""
-        return bool(self.encrypted_api_key and self.encrypted_api_key.strip())
-
     def __repr__(self) -> str:
         return (
-            f"<Agent(id={self.id}, model='{self.model_name}', "
-            f"tier={self.ai_tier})>"
+            f"<Agent(id={self.id}, provider='{self.llm_provider}', model='{self.model_name}')>"
         )
 

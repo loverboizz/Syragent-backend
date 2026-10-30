@@ -31,16 +31,29 @@ class Settings(BaseSettings):
     # --- Database (Supabase PostgreSQL + pgvector) ---
     DATABASE_URL: str  # Required — must point to Supabase
 
-    # --- Encryption (Fernet key for BYOK API keys) ---
+    # --- Encryption (Fernet symmetric key) ---
     ENCRYPTION_KEY: str  # Required — generate with Fernet.generate_key()
 
-    # --- Global AI Keys (FREE tier uses these) ---
+    # --- Platform Managed AI Keys (Syragent Managed Infrastructure) ---
     GOOGLE_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
+    ANTHROPIC_API_KEY: str = ""
+    DEEPSEEK_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
 
     from pydantic import field_validator
 
-    @field_validator("DATABASE_URL", "SECRET_KEY", "ENCRYPTION_KEY", "GOOGLE_API_KEY", mode="before")
+    @field_validator(
+        "DATABASE_URL",
+        "SECRET_KEY",
+        "ENCRYPTION_KEY",
+        "GOOGLE_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "GROQ_API_KEY",
+        mode="before",
+    )
     @classmethod
     def strip_whitespace(cls, v: str) -> str:
         return v.strip() if isinstance(v, str) else v
