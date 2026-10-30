@@ -58,7 +58,73 @@ async def execute_tool(
     if "Accept" not in headers:
         headers["Accept"] = "application/json"
 
-    # 2. Interpolate path parameters (e.g., https://api.shop.com/v1/orders/{order_id})
+    # 2. Fast-path internal Syragent / Sandbox endpoints (avoids self-HTTP loopback & Render cold-start latency)
+    raw_url = tool.endpoint_url or ""
+    if "/api/v1/sandbox/" in raw_url:
+        try:
+            from fastapi import HTTPException
+            from app.core.database import async_session_factory
+            from app.api.v1.sandbox_erp import (
+                syragent_account_lookup,
+                syragent_diagnose_service,
+                syragent_get_embed_code,
+                sandbox_lookup_order,
+                sandbox_search_inventory,
+                sandbox_create_ticket,
+                CreateTicketPayload,
+            )
+
+            res_data = None
+            if "/syragent/account-lookup" in raw_url:
+                kw = str(args.get("keyword", "")).strip()
+                async with async_session_factory() as db:
+                    res_data = await syragent_account_lookup(db=db, keyword=kw)
+            elif "/syragent/diagnose/" in raw_url:
+                sc = str(args.get("service_code", "")).strip()
+                async with async_session_factory() as db:
+                    res_data = await syragent_diagnose_service(service_code=sc, db=db)
+            elif "/syragent/embed-code/" in raw_url:
+                sc = str(args.get("service_code", "")).strip()
+                async with async_session_factory() as db:
+                    res_data = await syragent_get_embed_code(service_code=sc, db=db)
+            elif "/sandbox/orders/" in raw_url:
+                oid = str(args.get("order_id", "")).strip()
+                res_data = await sandbox_lookup_order(order_id=oid)
+            elif "/sandbox/inventory/search" in raw_url:
+                pname = str(args.get("product_name", "")).strip()
+                res_data = await sandbox_search_inventory(product_name=pname)
+            elif "/sandbox/tickets/create" in raw_url:
+                res_data = await sandbox_create_ticket(
+                    CreateTicketPayload(
+                        order_id=str(args.get("order_id", "")),
+                        customer_phone=str(args.get("customer_phone", "0901234567")),
+                        reason=str(args.get("reason", "")),
+                    )
+                )
+
+            if res_data is not None:
+                elapsed = round((time.perf_counter() - start_time) * 1000, 2)
+                return {
+                    "success": True,
+                    "status_code": 200,
+                    "data": truncate_payload(res_data, max_bytes=4096),
+                    "latency_ms": elapsed,
+                    "error": None,
+                }
+        except HTTPException as http_exc:
+            elapsed = round((time.perf_counter() - start_time) * 1000, 2)
+            return {
+                "success": False,
+                "status_code": http_exc.status_code,
+                "data": http_exc.detail if isinstance(http_exc.detail, dict) else {"detail": str(http_exc.detail)},
+                "latency_ms": elapsed,
+                "error": str(http_exc.detail),
+            }
+        except Exception:
+            # Fall back to standard HTTP execution below
+            pass
+
+    # 3. Interpolate path parameters (e.g., https://api.shop.com/v1/orders/{order_id})
     endpoint_url = tool.endpoint_url
     for key in list(args.keys()):
         placeholder = f"{{{key}}}"

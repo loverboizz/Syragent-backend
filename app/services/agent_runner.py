@@ -275,15 +275,19 @@ async def run_react_agent_gemini(
 
                 # Append assistant model response containing function call
                 contents.append(content)
-                # Append tool observation response back to Gemini
+                # Append tool observation response back to Gemini (Gemini 3.x requires role='user' for functionResponse)
+                fn_response_payload: dict[str, Any] = {
+                    "name": tool_name,
+                    "response": {"output": observation},
+                }
+                if "id" in function_call:
+                    fn_response_payload["id"] = function_call["id"]
+
                 contents.append({
-                    "role": "function",
+                    "role": "user",
                     "parts": [
                         {
-                            "functionResponse": {
-                                "name": tool_name,
-                                "response": {"output": observation},
-                            }
+                            "functionResponse": fn_response_payload
                         }
                     ],
                 })
